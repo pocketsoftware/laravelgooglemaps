@@ -204,13 +204,15 @@ class GMaps
         $this->markersInfo['marker_'.count($this->markers)] = array();
 
         $marker['position'] = '';                                // The position (lat/long co-ordinate or address) at which the marker will appear
-        $marker['infowindow_content'] = '';                        // If not blank, creates an infowindow (aka bubble) with the content provided. Can be plain text or HTML
+        $marker['infowindow_content'] = '';
+        $marker['streetview_content'] = '';                // If not blank, creates an infowindow (aka bubble) with the content provided. Can be plain text or HTML
         $marker['id'] = '';                                        // The unique identifier of the marker suffix (ie. marker_yourID). If blank, this will default to marker_X where X is an incremental number
         $marker['clickable'] = true;                            // Defines if the marker is clickable
         $marker['cursor'] = '';                                    // The name or url of the cursor to display on hover
         $marker['draggable'] = false;                            // Defines if the marker is draggable
         $marker['flat'] = false;                                // If set to TRUE will not display a shadow beneath the icon
         $marker['icon'] = '';                                    // The name or url of the icon to use for the marker
+        $marker['icon_custom'] = '';                            // custom icon
         $marker['icon_size'] = '';                                // The display size of the sprite or image being used. When using sprites, you must specify the sprite size. Expecting two comma-separated values for width and height respectively (ie '20,30'). See https://developers.google.com/maps/documentation/javascript/3.exp/reference#Icon
         $marker['icon_scaledSize'] = '';                        // The size of the entire image after scaling, if any. Use this property to stretch/shrink an image or a sprite. Expecting two comma-separated values for width and height respectively (ie '20,30')
         $marker['icon_origin'] = '';                            // If using a sprite, the position of the image within the sprite. Expecting two comma-separated values for distance from the top and left respectively (ie '20,30')
@@ -235,7 +237,7 @@ class GMaps
         $marker['label'] = '';                                    // The label of the marker.
 
         $marker_output = '';
-
+        $x = 0;
         foreach ($params as $key => $value) {
             if (isset($marker[$key])) {
                 $marker[$key] = $value;
@@ -314,6 +316,10 @@ class GMaps
             $marker_output .= ',
                 icon: marker_icon';
         }
+        if ($marker['icon_custom'] != "") {
+            $marker_output .= ',
+                icon: '. $marker['icon_custom'];
+        }
         if (!$marker['raiseondrag']) {
             $marker_output .= ',
                 raiseOnDrag: false';
@@ -359,19 +365,36 @@ class GMaps
             $marker['infowindow_content'] = str_replace('"', '\"', $marker['infowindow_content']);
 
             $marker_output .= '
+            iw_marker_'.$marker_id.' = new google.maps.InfoWindow();
             marker_'.$marker_id.'.set("content", "'.$marker['infowindow_content'].'");
 
-            google.maps.event.addListener(marker_'.$marker_id.', "click", function(event) {
-                iw_'.$this->map_name.'.setContent(this.get("content"));
-                iw_'.$this->map_name.'.open('.$this->map_name.', this);
-            ';
-            if ($marker['onclick'] != "") {
-                $marker_output .= $marker['onclick'].'
-            ';
-            }
-            $marker_output .= '
+            google.maps.event.addListenerOnce(iw_marker_'.$marker_id.', "domready", function() {
+              var _marker = new google.maps.LatLng('.$marker['position'].');
+              console.log(_marker);
+               panorama = new google.maps.StreetViewPanorama(document.getElementById("'.$marker['streetview_content'].'"), {
+                position: _marker ,
+                navigationControl: false,
+                enableCloseButton: false,
+                addressControl: false,
+                linksControl: false,
+                visible: true
+                });
+
             });
-            ';
+
+            google.maps.event.addListener(marker_'.$marker_id.', "click", function(event) {
+                iw_marker_'.$marker_id.'.setContent(this.get("content"));
+
+                iw_marker_'.$marker_id.'.open('.$this->map_name.', this);
+
+                ';
+                if ($marker['onclick'] != "") {
+                    $marker_output .= $marker['onclick'].'
+                ';
+                }
+                $marker_output .= '
+                });
+                ';
         } else {
             if ($marker['onclick'] != "") {
                 $marker_output .= '
@@ -455,6 +478,7 @@ class GMaps
                 ';
             }
         }
+
 
         array_push($this->markers, $marker_output);
     }
@@ -1250,6 +1274,7 @@ class GMaps
             $this->output_js_contents .= '{
                 maxWidth: '.$this->infowindowMaxWidth.'
             }';
+
         }
         $this->output_js_contents .= ');
 
@@ -1527,66 +1552,7 @@ class GMaps
                 ';
         }
 
-        if (strtolower($this->map_type) == "street") { // if defaulting the map to Street View
-            $this->output_js_contents .= '
-                var streetViewOptions = {
-                    position: myLatlng';
-            if (!$this->streetViewAddressControl) {
-                $this->output_js_contents .= ',
-                    addressControl: false';
-            }
-            if ($this->streetViewAddressPosition != "") {
-                $this->output_js_contents .= ',
-                    addressControlOptions: { position: google.maps.ControlPosition.'.$this->streetViewAddressPosition.' }';
-            }
-            if ($this->streetViewCloseButton) {
-                $this->output_js_contents .= ',
-                    enableCloseButton: true';
-            }
-            if (!$this->streetViewLinksControl) {
-                $this->output_js_contents .= ',
-                    linksControl: false';
-            }
-            if (!$this->streetViewPanControl) {
-                $this->output_js_contents .= ',
-                    panControl: false';
-            }
-            if ($this->streetViewPanPosition != "") {
-                $this->output_js_contents .= ',
-                    panControlOptions: { position: google.maps.ControlPosition.'.$this->streetViewPanPosition.' }';
-            }
-            if ($this->streetViewPovHeading != 0 || $this->streetViewPovPitch != 0 || $this->streetViewPovZoom != 0) {
-                $this->output_js_contents .= ',
-                    pov: {
-                        heading: '.$this->streetViewPovHeading.',
-                        pitch: '.$this->streetViewPovPitch.',
-                        zoom: '.$this->streetViewPovZoom.'
-                    }';
-            }
-            if (!$this->streetViewZoomControl) {
-                $this->output_js_contents .= ',
-                    zoomControl: false';
-            }
-            if ($this->streetViewZoomPosition != "" || $this->streetViewZoomStyle != "") {
-                $this->output_js_contents .= ',
-                    zoomControlOptions: {';
-                if ($this->streetViewZoomPosition != "") {
-                    $this->output_js_contents .= '
-                        position: google.maps.ControlPosition.'.$this->streetViewZoomPosition.',';
-                }
-                if ($this->streetViewZoomStyle != "") {
-                    $this->output_js_contents .= '
-                        style: google.maps.ZoomControlStyle.'.$this->streetViewZoomStyle.',';
-                }
-                $this->output_js_contents = trim($this->output_js_contents, ",");
-                $this->output_js_contents .= '}';
-            }
-            $this->output_js_contents .= '
-                };
-                var streetView = new google.maps.StreetViewPanorama(document.getElementById("'.$this->map_div_id.'"), streetViewOptions);
-                streetView.setVisible(true);
-                ';
-        }
+
 
         if ($this->center == "auto") { // if wanting to center on the users location
             $this->output_js_contents .= '
@@ -1654,9 +1620,78 @@ class GMaps
             ';
 
             $this->output_js_contents .= '
+            console.log(drawingManager);
+            // Create the DIV to hold the control and call the ClearControl() constructor
+            var clearControlDiv = document.createElement(\'div\');
+            var clearControl = new ClearControl(clearControlDiv);
+
+            clearControlDiv.index = 0;
+            map.controls[google.maps.ControlPosition.RIGHT_TOP].push(clearControlDiv);
+
+        //To set CSS and handling event for the control
+            function ClearControl(controlDiv) {
+                // Set CSS for the control border.
+                var controlUI = document.createElement(\'div\');
+                controlUI.style.backgroundColor = \'#fff\';
+                controlUI.style.border = \'2px solid #fff\';
+                controlUI.style.zindex = \'10\';
+                controlUI.style.cursor = \'pointer\';
+                controlUI.style.margin = \'10px\';
+                controlUI.style.textAlign = \'center\';
+                controlUI.title = \'Clear Fence\';
+                controlUI.class = \'gmnoprint gm-bundled-control gm-bundled-control-on-bottom\';
+                controlDiv.appendChild(controlUI);
+
+                // Set CSS for the control interior.
+                var controlText = document.createElement(\'div\');
+                controlText.style.color = \'rgb(25,25,25)\';
+                controlText.style.fontFamily = \'Roboto,Arial,sans-serif\';
+                controlText.style.fontSize = \'16px\';
+
+                controlText.style.paddingLeft = \'11px\';
+                controlText.style.paddingRight = \'11px\';
+                 controlText.style.paddingTop = \'8px\';
+                controlText.style.paddingBottom = \'8px\';
+                controlText.innerHTML = \'<i class="fas fa-eraser"></i>\';
+                controlUI.appendChild(controlText);
+
+                // Setup the click event listeners
+                google.maps.event.addDomListener(controlUI, \'click\', function () {
+                    deleteSelectedShape();
+                });
+            }
+
+            var selectedShape;
+             function clearSelection() {
+                    if (selectedShape) {
+                      selectedShape.setEditable(false);
+                      selectedShape = null;
+                    }
+                  }
+
+              function setSelection(shape) {
+                clearSelection();
+                selectedShape = shape;
+                fenceData(shape);
+                drawingManager.setDrawingMode(null);
+              }
+
+              function deleteSelectedShape() {
+                if (selectedShape) {
+                  selectedShape.setMap(null);
+                }
+              }
+
+
             google.maps.event.addListener(drawingManager, "overlaycomplete", function(event) {
                 var newShape = event.overlay;
                 newShape.type = event.type;
+
+                google.maps.event.addListener(newShape, \'click\', function() {
+                  setSelection(newShape);
+                });
+                setSelection(newShape);
+
                 ';
             if (count($this->drawingOnComplete)) {
                 foreach ($this->drawingOnComplete as $shape => $js) {
@@ -2144,6 +2179,7 @@ class GMaps
             var marker = new google.maps.Marker(markerOptions);
             markers_'.$this->map_name.'.push(marker);
             lat_longs_'.$this->map_name.'.push(marker.getPosition());
+
             return marker;
         }
         ';
@@ -2370,7 +2406,7 @@ class GMaps
             }
         }
 
-        $data_location = "https://maps.google.com/maps/api/geocode/json?address=".urlencode(utf8_encode($address))."&sensor=".$this->sensor."&key=".$this->apiKey;
+        $data_location = "https://maps.google.com/maps/api/geocode/json?address=".urlencode(utf8_encode($address))."&sensor=".$this->sensor;
         if ($this->region != "" && strlen($this->region) == 2) {
             $data_location .= "&region=".$this->region;
         }
